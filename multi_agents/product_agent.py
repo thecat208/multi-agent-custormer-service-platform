@@ -57,10 +57,8 @@ class ProductAgent(BaseAgent):
         customer_query = state["customer_query"]
         session_id = state.get("session_id", "default")
 
-        # 对话轮次由 classify / agent 外层节点写入 persisted_dialogue，此处只读 state
-
-        # 获取对话历史上下文（优先 state.persisted_dialogue）
-        conversation_context = self._get_conversation_context(session_id, state)
+        # 对话轮次由 classify / 外层节点写入 persisted_dialogue
+        conversation_context = self._get_conversation_context(state)
 
         # 从产品数据库中匹配相关信息
         matched_products = self._match_products(customer_query)

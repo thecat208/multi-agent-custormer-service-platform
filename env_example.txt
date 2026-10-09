@@ -1,45 +1,30 @@
-# Example environment variables for the multi-agent customer service system
+# Example environment variables
 # Copy this file to .env and edit as needed
 
-# ===== SiliconFlow API (OpenAI-compatible) =====
+# ===== LLM (OpenAI-compatible, default SiliconFlow) =====
 OPENAI_API_KEY=your_siliconflow_api_key_here
 OPENAI_BASE_URL=https://api.siliconflow.cn/v1
 OPENAI_MODEL=Qwen/Qwen3-8B
+LLM_TEMPERATURE=0.3
+LLM_TIMEOUT=30
+LLM_MAX_RETRIES=3
+# Set true only if your provider needs thinking mode (Qwen3 default is off here)
+LLM_ENABLE_THINKING=false
 
-# ===== HTTP client =====
-HTTP_TIMEOUT=30
-HTTP_MAX_RETRIES=3
+# ===== Embedding (knowledge base retrieval) =====
+EMBEDDING_MODEL=BAAI/bge-large-zh-v1.5
 
-# ===== Logging =====
-LOG_LEVEL=INFO
+# ===== Session persistence (SQLite checkpointer) =====
+CHECKPOINT_DB_PATH=./data/checkpoints.sqlite
 
-# ===== Flask web app (web_app.py) =====
-FLASK_PORT=5000
-FLASK_DEBUG=False
-FLASK_SECRET_KEY=your-secret-key-here
-
-# LangGraph HTTP API (see chat_web_service.py)
-# LANGGRAPH_API_URL=http://127.0.0.1:2024
-# LANGGRAPH_GRAPH_NAME=customer_service
+# ===== Web =====
+APP_HOST=0.0.0.0
+APP_PORT=5000
 
 # ===== Notes =====
-
-# 1. API key
-# Sign up at https://api.siliconflow.cn and create an API key
-
-# 2. Model choice
-# Examples:
-# - Qwen/QwQ-32B (recommended, strongest)
-# - Qwen/Qwen3-8B (good cost/performance)
-# - Qwen/Qwen3-14B (better quality)
-# - Qwen/Qwen3-32B (highest quality)
-# - Qwen/Qwen2.5-7B (lightweight)
-# - Qwen/Qwen2.5-14B (balanced)
-
-# 3. Optional overrides
-# To change timeout or retries, edit e.g.:
-# HTTP_TIMEOUT=60
-# HTTP_MAX_RETRIES=5
-
-# Windows: if `langgraph dev` fails loading .env with UnicodeDecodeError, keep comments
-# ASCII-only (as here) or save .env as UTF-8 with BOM.
+# 1. Get an API key at https://api.siliconflow.cn
+# 2. Recommended models:
+#    - Qwen/Qwen3-8B   (good cost/performance, default)
+#    - Qwen/Qwen3-14B  (better quality)
+#    - Qwen/Qwen3-32B  (highest quality)
+# 3. Windows: keep this file ASCII-only, or save .env as UTF-8 with BOM.

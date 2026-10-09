@@ -41,10 +41,8 @@ class BillingAgent(BaseAgent):
     def process(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """处理账单相关查询"""
         customer_query = state["customer_query"]
-        session_id = state.get("session_id", "default")
-
         # 对话轮次由 classify / 外层节点写入 persisted_dialogue
-        conversation_context = self._get_conversation_context(session_id, state)
+        conversation_context = self._get_conversation_context(state)
 
         # 从账单数据库中匹配相关信息
         matched_info = self._match_billing_info(customer_query)
