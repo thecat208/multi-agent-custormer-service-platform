@@ -12,7 +12,13 @@ class GeneralAgent(BaseAgent):
         super().__init__(
             name="综合客服",
             role="一般咨询处理",
-            expertise=["信息查询", "基础服务", "问题转接"]
+            expertise=["信息查询", "基础服务", "问题转接"],
+            handoff_targets={
+                "product_agent": "产品选购、参数、价格对比等产品咨询",
+                "tech_agent": "故障报修、使用异常等技术支持",
+                "billing_agent": "支付、退款、发票等账单诉求",
+                "complaint_agent": "投诉与建议反馈",
+            },
         )
 
         # TODO: 服务信息应该从客服系统获取，这里只是模拟数据
@@ -41,6 +47,16 @@ class GeneralAgent(BaseAgent):
     def process(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """处理一般咨询查询"""
         customer_query = state["customer_query"]
+
+        # 跨域诉求先判断是否转接（单跳，白名单内）
+        target = self._decide_handoff(customer_query, state)
+        if target:
+            from .base_agent import AGENT_LABELS
+            state["response"] = ""
+            state["current_agent"] = AGENT_LABELS.get(target, target)
+            state["tools_used"].append(f"handoff:{target}")
+            return state
+
         # 对话轮次由 classify / 外层节点写入 persisted_dialogue
         conversation_context = self._get_conversation_context(state)
 
@@ -117,17 +133,16 @@ class GeneralAgent(BaseAgent):
                     info_text += f"• {service}：{description}\n"
                 matched_info.append(info_text)
 
-        # 如果没有精确匹配，尝试关键词匹配
+        # 如果没有精确匹配，尝试关键词匹配（每个类目只循环一次，无需去重）
         if not matched_info:
             for category, services in self.service_database.items():
                 if any(keyword in query_lower for keyword in ["时间", "联系", "服务", "营业", "电话", "邮箱"]):
-                    if category not in [info.split('【')[1].split('】')[0] for info in matched_info]:
-                        info_text = f"""相关信息：{category}\n"""
-                        # 只显示前2项服务
-                        for i, (service, description) in enumerate(services.items()):
-                            if i < 2:
-                                info_text += f"• {service}：{description}\n"
-                        info_text += "..."
-                        matched_info.append(info_text)
+                    info_text = f"""相关信息：{category}\n"""
+                    # 只显示前2项服务
+                    for i, (service, description) in enumerate(services.items()):
+                        if i < 2:
+                            info_text += f"• {service}：{description}\n"
+                    info_text += "..."
+                    matched_info.append(info_text)
 
         return "\n".join(matched_info) if matched_info else ""

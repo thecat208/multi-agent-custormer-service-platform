@@ -5,17 +5,36 @@
 """
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
-from langchain_core.messages import ToolMessage
+from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
+from pydantic import BaseModel, Field
+
+# 节点名 → 面向客户的中文名（转接提示与回复前缀使用）
+AGENT_LABELS = {
+    "product_agent": "产品专家",
+    "tech_agent": "技术支持专家",
+    "billing_agent": "账单专家",
+    "complaint_agent": "投诉处理专家",
+    "general_agent": "综合客服",
+}
+
+
+class HandoffDecision(BaseModel):
+    """专家间转接判断的结构化输出"""
+    handoff_to: str = Field(description="转接目标节点名；若无需转接填 none")
+    reason: str = Field(default="", description="一句话转接理由")
 
 
 class BaseAgent(ABC):
-    def __init__(self, name: str, role: str, expertise: List[str]):
+    def __init__(self, name: str, role: str, expertise: List[str],
+                 handoff_targets: Optional[Dict[str, str]] = None):
         self.name = name
         self.role = role
         self.expertise = expertise
         self.llm = None  # 运行时注入
+        # 可转接的专家：{节点名: 适用于该专家的诉求描述}
+        self.handoff_targets = handoff_targets or {}
 
     def set_llm(self, llm):
         """设置 LLM 客户端"""
@@ -25,6 +44,43 @@ class BaseAgent(ABC):
     def process(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """处理客户查询"""
         ...
+
+    def _decide_handoff(self, customer_query: str, state: Dict[str, Any]) -> str:
+        """判断当前诉求是否应转接给更合适的专家。
+
+        设计约束：
+        - 只做单跳转接（handoff_count 上限 1），杜绝专家间循环转接
+        - 模型输出的目标必须在 handoff_targets 白名单内，否则不转接
+        - LLM 不可用或判断失败时返回空串，走本专家正常处理（宁可不转，不可中断）
+        """
+        if not self.handoff_targets or self.llm is None:
+            return ""
+        if state.get("handoff_count", 0) >= 1:
+            return ""
+
+        candidates = "\n".join(f"- {k}: {v}" for k, v in self.handoff_targets.items())
+        prompt = f"""你是客服编排助手。判断当前客户诉求是否应该转接给更合适的专家处理。
+
+可转接的专家：
+{candidates}
+
+若客户诉求明确属于上述某个专家的领域，输出对应节点名；否则输出 none。
+只做判断，不要回答客户问题。"""
+        try:
+            result = self.llm.with_structured_output(HandoffDecision).invoke([
+                SystemMessage(content=prompt),
+                HumanMessage(content=customer_query),
+            ])
+            target = (result.handoff_to or "").strip()
+        except Exception as e:
+            print(f"[{self.name}] handoff decision failed: {e}")
+            return ""
+
+        if target in self.handoff_targets:
+            state["handoff_count"] = state.get("handoff_count", 0) + 1
+            state["next_agent"] = target
+            return target
+        return ""
 
     def _retrieve(self, query: str, k: int = None) -> str:
         """知识库检索；未构建索引或未配置 Key 时返回空串（调用方走关键词兜底）"""

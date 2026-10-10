@@ -33,7 +33,9 @@ class AgentState(TypedDict):
     query_type: str
     response: str
     tools_used: List[str]
+    # 专家间转接：目标节点名（空串表示无转接）与已发生的转接次数（上限 1，防循环）
     next_agent: str
+    handoff_count: int
     # 由图 checkpointer 持久化，跨请求续聊的对话记录
     persisted_dialogue: List[Any]
 
@@ -71,6 +73,7 @@ def classify_query_node(state: AgentState) -> AgentState:
     state.setdefault("tools_used", [])
     state.setdefault("persisted_dialogue", [])
     state.setdefault("next_agent", "")
+    state.setdefault("handoff_count", 0)
     state.setdefault("messages", [])
 
     customer_query = state.get("customer_query", "")
@@ -118,6 +121,9 @@ def classify_query_node(state: AgentState) -> AgentState:
 def create_agent_node(agent_name: str):
     """创建智能体处理节点"""
     def agent_node(state: AgentState) -> AgentState:
+        # 清空上一跳的转接标记，避免路由读到陈旧目标造成循环
+        state["next_agent"] = ""
+
         agents = initialize_agents()
         agent = agents.get(agent_name)
         if not agent:
@@ -133,6 +139,10 @@ def create_agent_node(agent_name: str):
         if "response" not in result:
             print(f"Agent {agent_name} result missing 'response' field: {result}")
             result["response"] = "Error: No response from agent"
+
+        # 转接轮：本节点未产生回复，对话轮次由最终应答的专家写入
+        if not result.get("response"):
+            return result
 
         # 助手轮次写入 checkpointer 状态
         pd = list(result.get("persisted_dialogue") or [])
@@ -180,9 +190,17 @@ def make_graph(checkpointer=None):
         }
     )
 
-    for agent in ("product_agent", "tech_agent", "billing_agent",
-                  "complaint_agent", "general_agent"):
-        workflow.add_edge(agent, "final_response")
+    # 专家节点之后：若有受控转接（next_agent）则去目标专家，否则进最终响应。
+    # 转接目标受 handoff_targets 白名单与 handoff_count 上限双重约束，不会成环。
+    def route_after_agent(x):
+        return x.get("next_agent") or "final_response"
+
+    agent_names = ("product_agent", "tech_agent", "billing_agent",
+                   "complaint_agent", "general_agent")
+    for name in agent_names:
+        targets = {a: a for a in agent_names if a != name}
+        targets["final_response"] = "final_response"
+        workflow.add_conditional_edges(name, route_after_agent, targets)
 
     workflow.set_finish_point("final_response")
 

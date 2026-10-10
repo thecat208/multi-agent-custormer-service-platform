@@ -12,7 +12,10 @@ class ProductAgent(BaseAgent):
         super().__init__(
             name="产品专家",
             role="产品信息咨询和推荐",
-            expertise=["产品规格", "价格比较", "功能特点", "市场分析"]
+            expertise=["产品规格", "价格比较", "功能特点", "市场分析"],
+            handoff_targets={
+                "billing_agent": "退款、退货、退款进度、发票等账单诉求",
+            },
         )
 
         # TODO: 产品信息应该从数据库获取，这里只是模拟数据
@@ -55,6 +58,15 @@ class ProductAgent(BaseAgent):
     def process(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """处理产品相关查询"""
         customer_query = state["customer_query"]
+
+        # 跨域诉求先判断是否转接（单跳，白名单内）
+        target = self._decide_handoff(customer_query, state)
+        if target:
+            from .base_agent import AGENT_LABELS
+            state["response"] = ""
+            state["current_agent"] = AGENT_LABELS.get(target, target)
+            state["tools_used"].append(f"handoff:{target}")
+            return state
 
         # 对话轮次由 classify / 外层节点写入 persisted_dialogue
         conversation_context = self._get_conversation_context(state)
