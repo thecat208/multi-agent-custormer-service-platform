@@ -44,8 +44,12 @@ class GeneralAgent(BaseAgent):
         # 对话轮次由 classify / 外层节点写入 persisted_dialogue
         conversation_context = self._get_conversation_context(state)
 
-        # 从服务数据库中匹配相关信息
-        matched_info = self._match_service_info(customer_query)
+        # 知识库检索优先；索引未就绪时回退到内置关键词匹配（离线兜底）
+        knowledge = self._retrieve(customer_query)
+        if knowledge:
+            state["tools_used"].append("kb_retrieval")
+        else:
+            knowledge = self._match_service_info(customer_query)
 
         # 构建系统提示并增强对话上下文说明
         base_system_prompt = f"""你是{self.name}，专门负责{self.role}。
@@ -75,10 +79,10 @@ class GeneralAgent(BaseAgent):
         # 添加系统提示
         messages.append(SystemMessage(content=system_prompt))
 
-        # 如果有匹配的服务信息，添加到上下文中
-        if matched_info:
+        # 如果有服务知识（检索或匹配），添加到上下文中
+        if knowledge:
             service_context = f"""服务信息：
-{matched_info}
+{knowledge}
 
 当前查询：{customer_query}"""
             messages.append(HumanMessage(content=service_context))

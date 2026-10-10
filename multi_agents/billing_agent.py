@@ -1,10 +1,12 @@
 """
 账单专家智能体
-专门负责财务和账单问题处理
+负责财务和账单问题处理：政策咨询走知识库检索，订单查询走工具调用
 """
 
 from typing import Dict, List, Any
 from langchain_core.messages import HumanMessage, SystemMessage
+
+from tools.business import query_order
 from .base_agent import BaseAgent
 
 class BillingAgent(BaseAgent):
@@ -44,10 +46,13 @@ class BillingAgent(BaseAgent):
         # 对话轮次由 classify / 外层节点写入 persisted_dialogue
         conversation_context = self._get_conversation_context(state)
 
-        # 从账单数据库中匹配相关信息
-        matched_info = self._match_billing_info(customer_query)
+        # 退款/发票/支付政策：知识库检索优先，未就绪时回退关键词匹配
+        knowledge = self._retrieve(customer_query)
+        if knowledge:
+            state["tools_used"].append("kb_retrieval")
+        else:
+            knowledge = self._match_billing_info(customer_query)
 
-        # 构建系统提示并增强对话上下文说明
         base_system_prompt = f"""你是{self.name}，专门负责{self.role}。
         你的专业领域包括：{', '.join(self.expertise)}
 
@@ -57,14 +62,15 @@ class BillingAgent(BaseAgent):
         3. 说明需要提供的相关材料
         4. 如果问题复杂，建议联系专门的财务人员
 
-        回答要准确、专业，涉及金额和时间的信息要具体明确。如果问题超出你的权限范围，请说明并建议转接给相关部门。"""
+        回答要准确、专业，涉及金额和时间的信息要具体明确。
+        如果客户询问订单状态/物流/退款进度，请调用 query_order 工具查询真实数据，
+        不要凭空猜测订单信息；工具返回错误时如实告知客户并引导核对订单号。
+        如果问题超出你的权限范围，请说明并建议转接给相关部门。"""
 
         system_prompt = self._enhance_system_prompt_with_context(base_system_prompt)
 
-        # 构建消息列表
         messages = []
 
-        # 添加对话历史上下文（如果有的话）
         if conversation_context:
             context_message = f"""对话历史上下文：
 {conversation_context}
@@ -72,31 +78,33 @@ class BillingAgent(BaseAgent):
 请基于以上对话历史和当前查询，提供连贯的解答。"""
             messages.append(SystemMessage(content=context_message))
 
-        # 添加系统提示
         messages.append(SystemMessage(content=system_prompt))
 
-        # 如果有匹配的账单信息，添加到上下文中
-        if matched_info:
+        if knowledge:
             billing_context = f"""账单政策信息：
-{matched_info}
+{knowledge}
 
 当前查询：{customer_query}"""
             messages.append(HumanMessage(content=billing_context))
         else:
             messages.append(HumanMessage(content=customer_query))
 
-        # 调用LLM
+        state["tools_used"].append(f"{self.name}_processing")
+
+        # LLM 不可用（未配置 Key）或调用失败时降级为固定话术
+        if self.llm is None:
+            state["response"] = "抱歉，处理您的账单问题时遇到系统错误，请稍后重试。"
+            state["current_agent"] = self.name
+            return state
+
         try:
-            response = self.llm.invoke(messages)
-            response_content = response.content
+            response_content = self._run_with_tools(messages, [query_order], state)
         except Exception as e:
             print(f"账单专家调用LLM时出错: {e}")
             response_content = "抱歉，处理您的账单问题时遇到系统错误，请稍后重试。"
 
         state["response"] = response_content
         state["current_agent"] = self.name
-        state["tools_used"].append(f"{self.name}_processing")
-
         return state
 
     def _match_billing_info(self, query: str) -> str:

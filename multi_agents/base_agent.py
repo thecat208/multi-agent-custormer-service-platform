@@ -7,6 +7,8 @@
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List
 
+from langchain_core.messages import ToolMessage
+
 
 class BaseAgent(ABC):
     def __init__(self, name: str, role: str, expertise: List[str]):
@@ -23,6 +25,52 @@ class BaseAgent(ABC):
     def process(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """处理客户查询"""
         ...
+
+    def _retrieve(self, query: str, k: int = None) -> str:
+        """知识库检索；未构建索引或未配置 Key 时返回空串（调用方走关键词兜底）"""
+        try:
+            from retrieval.vector_store import search_kb
+            return search_kb(query, k)
+        except Exception as e:
+            print(f"[{self.name}] retrieval skipped: {e}")
+            return ""
+
+    def _run_with_tools(self, messages: List, tools: List, state: Dict[str, Any],
+                        max_rounds: int = 3) -> str:
+        """带工具调用的对话循环。
+
+        工具执行异常以错误文本回传给 LLM 自行处理，不让异常冒泡中断整轮对话；
+        max_rounds 限制防止模型循环调用。
+        """
+        tool_map = {t.name: t for t in tools}
+        tool_llm = self.llm.bind_tools(tools)
+        response = tool_llm.invoke(messages)
+
+        for _ in range(max_rounds):
+            calls = getattr(response, "tool_calls", None)
+            if not calls:
+                break
+            messages.append(response)
+            for call in calls:
+                name = call["name"]
+                tool = tool_map.get(name)
+                if tool is None:
+                    result = f"错误：未知工具 {name}"
+                else:
+                    try:
+                        result = str(tool.invoke(call.get("args") or {}))
+                    except Exception as e:
+                        result = f"错误：工具执行失败 {e}"
+                    state["tools_used"].append(name)
+                messages.append(ToolMessage(content=result, tool_call_id=call["id"]))
+            response = tool_llm.invoke(messages)
+
+        content = response.content
+        if isinstance(content, list):  # 部分模型返回分段内容
+            content = "".join(
+                p.get("text", "") if isinstance(p, dict) else str(p) for p in content
+            )
+        return content
 
     def _get_conversation_context(self, state: Dict[str, Any], max_messages: int = 12) -> str:
         """读取最近对话并格式化为提示词上下文"""

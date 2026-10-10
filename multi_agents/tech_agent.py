@@ -1,10 +1,12 @@
 """
 技术支持专家智能体
-专门负责技术问题诊断和解决
+负责技术问题诊断和解决：排障知识走知识库检索，订单核对与工单创建走工具调用
 """
 
 from typing import Dict, List, Any
 from langchain_core.messages import HumanMessage, SystemMessage
+
+from tools.business import create_ticket, query_order
 from .base_agent import BaseAgent
 
 class TechAgent(BaseAgent):
@@ -44,10 +46,13 @@ class TechAgent(BaseAgent):
         # 对话轮次由 classify / 外层节点写入 persisted_dialogue
         conversation_context = self._get_conversation_context(state)
 
-        # 从技术数据库中匹配相关信息
-        matched_info = self._match_tech_info(customer_query)
+        # 排障知识：知识库检索优先，未就绪时回退关键词匹配
+        knowledge = self._retrieve(customer_query)
+        if knowledge:
+            state["tools_used"].append("kb_retrieval")
+        else:
+            knowledge = self._match_tech_info(customer_query)
 
-        # 构建系统提示并增强对话上下文说明
         base_system_prompt = f"""你是{self.name}，专门负责{self.role}。
         你的专业领域包括：{', '.join(self.expertise)}
 
@@ -57,14 +62,16 @@ class TechAgent(BaseAgent):
         3. 说明可能的原因和预防措施
         4. 如果问题复杂，建议联系专业技术人员
 
-        回答要专业、准确，技术术语要通俗易懂。如果问题超出你的专业范围，请说明并建议转接给相应的技术专家。"""
+        工具使用规范：
+        - 需要核对订单信息时调用 query_order；工具返回错误时如实告知并引导客户核对订单号
+        - 自助排障失败、需要人工介入时，先向客户确认设备型号与故障现象，
+          再调用 create_ticket 创建工单，并把工单号告知客户
+        - 不要凭空编造订单信息或工单号"""
 
         system_prompt = self._enhance_system_prompt_with_context(base_system_prompt)
 
-        # 构建消息列表
         messages = []
 
-        # 添加对话历史上下文（如果有的话）
         if conversation_context:
             context_message = f"""对话历史上下文：
 {conversation_context}
@@ -72,31 +79,33 @@ class TechAgent(BaseAgent):
 请基于以上对话历史和当前查询，提供连贯的解答。"""
             messages.append(SystemMessage(content=context_message))
 
-        # 添加系统提示
         messages.append(SystemMessage(content=system_prompt))
 
-        # 如果有匹配的技术信息，添加到上下文中
-        if matched_info:
+        if knowledge:
             tech_context = f"""技术解决方案：
-{matched_info}
+{knowledge}
 
 当前查询：{customer_query}"""
             messages.append(HumanMessage(content=tech_context))
         else:
             messages.append(HumanMessage(content=customer_query))
 
-        # 调用LLM
+        state["tools_used"].append(f"{self.name}_processing")
+
+        # LLM 不可用（未配置 Key）或调用失败时降级为固定话术
+        if self.llm is None:
+            state["response"] = "抱歉，处理您的技术问题时遇到系统错误，请稍后重试。"
+            state["current_agent"] = self.name
+            return state
+
         try:
-            response = self.llm.invoke(messages)
-            response_content = response.content
+            response_content = self._run_with_tools(messages, [query_order, create_ticket], state)
         except Exception as e:
             print(f"技术专家调用LLM时出错: {e}")
             response_content = "抱歉，处理您的技术问题时遇到系统错误，请稍后重试。"
 
         state["response"] = response_content
         state["current_agent"] = self.name
-        state["tools_used"].append(f"{self.name}_processing")
-
         return state
 
     def _match_tech_info(self, query: str) -> str:

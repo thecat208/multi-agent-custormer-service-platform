@@ -55,13 +55,16 @@ class ProductAgent(BaseAgent):
     def process(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """处理产品相关查询"""
         customer_query = state["customer_query"]
-        session_id = state.get("session_id", "default")
 
         # 对话轮次由 classify / 外层节点写入 persisted_dialogue
         conversation_context = self._get_conversation_context(state)
 
-        # 从产品数据库中匹配相关信息
-        matched_products = self._match_products(customer_query)
+        # 知识库检索优先；索引未就绪时回退到内置关键词匹配（离线兜底）
+        knowledge = self._retrieve(customer_query)
+        if knowledge:
+            state["tools_used"].append("kb_retrieval")
+        else:
+            knowledge = self._match_products(customer_query)
 
         # 构建系统提示并增强对话上下文说明
         base_system_prompt = f"""你是{self.name}，专门负责{self.role}。
@@ -91,10 +94,10 @@ class ProductAgent(BaseAgent):
         # 添加系统提示
         messages.append(SystemMessage(content=system_prompt))
 
-        # 如果有匹配的产品信息，添加到上下文中
-        if matched_products:
+        # 如果有产品知识（检索或匹配），添加到上下文中
+        if knowledge:
             product_context = f"""产品信息：
-{matched_products}
+{knowledge}
 
 当前查询：{customer_query}"""
             messages.append(HumanMessage(content=product_context))

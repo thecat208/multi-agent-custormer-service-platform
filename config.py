@@ -21,6 +21,9 @@ LLM_ENABLE_THINKING = os.getenv("LLM_ENABLE_THINKING", "false").lower() == "true
 
 # ===== Embedding（知识库检索用）=====
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "BAAI/bge-large-zh-v1.5")
+KB_DOCS_DIR = os.getenv("KB_DOCS_DIR", os.path.join(os.path.dirname(os.path.abspath(__file__)), "retrieval", "kb_docs"))
+KB_INDEX_PATH = os.getenv("KB_INDEX_PATH", "./data/kb_index")
+RETRIEVAL_TOP_K = int(os.getenv("RETRIEVAL_TOP_K", "3"))
 
 # ===== 会话持久化（SQLite checkpointer）=====
 CHECKPOINT_DB_PATH = os.getenv("CHECKPOINT_DB_PATH", "./data/checkpoints.sqlite")
