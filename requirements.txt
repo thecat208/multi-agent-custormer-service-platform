@@ -2,10 +2,14 @@ langgraph>=1.0.0
 langchain-openai>=1.0.0
 langgraph-checkpoint-sqlite>=2.0.10
 faiss-cpu>=1.8.0
+langchain-text-splitters>=0.3.0
 fastapi>=0.115.0
 uvicorn[standard]>=0.30.0
 python-dotenv>=1.0.0
 pydantic>=2.7.4
+
+# local embedding mode only (EMBEDDING_PROVIDER=local):
+# sentence-transformers>=3.0.0
 
 # dev / test
 pytest>=8.0.0

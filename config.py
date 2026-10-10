@@ -20,7 +20,12 @@ LLM_MAX_RETRIES = int(os.getenv("LLM_MAX_RETRIES", "3"))
 LLM_ENABLE_THINKING = os.getenv("LLM_ENABLE_THINKING", "false").lower() == "true"
 
 # ===== Embedding（知识库检索用）=====
+# provider: api（OpenAI 兼容端点）| local（本地 sentence-transformers 模型）
+EMBEDDING_PROVIDER = os.getenv("EMBEDDING_PROVIDER", "api").lower()
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "BAAI/bge-large-zh-v1.5")
+# local 模式下：HuggingFace 模型名或本地模型目录（如 D:\models\bge-large-zh-v1.5）
+EMBEDDING_LOCAL_MODEL = os.getenv("EMBEDDING_LOCAL_MODEL", "BAAI/bge-large-zh-v1.5")
+EMBEDDING_DEVICE = os.getenv("EMBEDDING_DEVICE", "cpu")
 KB_DOCS_DIR = os.getenv("KB_DOCS_DIR", os.path.join(os.path.dirname(os.path.abspath(__file__)), "retrieval", "kb_docs"))
 KB_INDEX_PATH = os.getenv("KB_INDEX_PATH", "./data/kb_index")
 RETRIEVAL_TOP_K = int(os.getenv("RETRIEVAL_TOP_K", "3"))

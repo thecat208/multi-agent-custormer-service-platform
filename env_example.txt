@@ -12,7 +12,12 @@ LLM_MAX_RETRIES=3
 LLM_ENABLE_THINKING=false
 
 # ===== Embedding (knowledge base retrieval) =====
+# provider: api (OpenAI-compatible endpoint) | local (sentence-transformers)
+EMBEDDING_PROVIDER=api
 EMBEDDING_MODEL=BAAI/bge-large-zh-v1.5
+# local mode only: HuggingFace model name or local model directory
+# EMBEDDING_LOCAL_MODEL=D:/models/bge-large-zh-v1.5
+# EMBEDDING_DEVICE=cpu
 
 # ===== Session persistence (SQLite checkpointer) =====
 CHECKPOINT_DB_PATH=./data/checkpoints.sqlite

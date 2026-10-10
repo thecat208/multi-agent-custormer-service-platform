@@ -1,6 +1,8 @@
 """
 知识库构建 CLI：python -m retrieval.build
-需在 .env 配置 OPENAI_API_KEY（Embedding 走同一 OpenAI 兼容端点）。
+嵌入来源由 EMBEDDING_PROVIDER 决定：
+  api   —— .env 配置 OPENAI_API_KEY（默认）
+  local —— pip install sentence-transformers，EMBEDDING_LOCAL_MODEL 指向模型名或本地目录
 """
 
 from retrieval.vector_store import build_kb

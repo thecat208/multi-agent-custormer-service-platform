@@ -1,9 +1,12 @@
 """
 FAISS 本地向量知识库：构建与检索
-构建（需 Embedding API）：python -m retrieval.build
-检索：search_kb(query, k) —— 未构建索引或未配置 Key 时返回空串，Agent 自动走关键词兜底
+构建：python -m retrieval.build（api 模式需 Embedding Key；local 模式需 sentence-transformers）
+检索：search_kb(query, k) —— 未构建索引或嵌入不可用时返回空串，Agent 自动走关键词兜底
 实现说明：不引入 langchain_community 的 VectorStore 封装，
 直接用 faiss.IndexFlatIP + 归一化向量做余弦检索，元数据存 JSON，结构透明。
+嵌入支持两种来源（EMBEDDING_PROVIDER）：
+  api   —— OpenAI 兼容端点（默认，与 LLM 共用配置）
+  local —— sentence-transformers 本地模型（可传本地目录），离线可用
 """
 
 import json
@@ -13,7 +16,10 @@ from typing import List
 import numpy as np
 
 from config import (
+    EMBEDDING_DEVICE,
+    EMBEDDING_LOCAL_MODEL,
     EMBEDDING_MODEL,
+    EMBEDDING_PROVIDER,
     KB_DOCS_DIR,
     KB_INDEX_PATH,
     OPENAI_API_KEY,
@@ -23,21 +29,64 @@ from config import (
 
 # 惰性加载的检索上下文（进程内单例）
 _cache: dict = {}
+# 嵌入实例单例：local 模式下避免每次查询重复加载模型
+_embeddings_singleton: dict = {}
+
+
+class _LocalEmbeddings:
+    """sentence-transformers 本地模型的最小封装，接口对齐 OpenAIEmbeddings"""
+
+    def __init__(self, model_name: str, device: str = "cpu"):
+        try:
+            from sentence_transformers import SentenceTransformer
+        except ImportError as e:
+            raise RuntimeError(
+                "本地嵌入模式需要 sentence-transformers：pip install sentence-transformers"
+            ) from e
+        self._model = SentenceTransformer(model_name, device=device)
+
+    def embed_documents(self, texts: List[str]) -> List[List[float]]:
+        vecs = self._model.encode(
+            texts, normalize_embeddings=True, show_progress_bar=False
+        )
+        return np.asarray(vecs).tolist()
+
+    def embed_query(self, text: str) -> List[float]:
+        vec = self._model.encode(
+            text, normalize_embeddings=True, show_progress_bar=False
+        )
+        return np.asarray(vec).tolist()
+
+
+def _embeddings_ready() -> bool:
+    """嵌入是否已具备可用条件（不实际加载模型）"""
+    if EMBEDDING_PROVIDER == "local":
+        return bool(EMBEDDING_LOCAL_MODEL.strip())
+    return bool(OPENAI_API_KEY)
 
 
 def _get_embeddings():
+    if EMBEDDING_PROVIDER == "local":
+        if "local" not in _embeddings_singleton:
+            _embeddings_singleton["local"] = _LocalEmbeddings(
+                EMBEDDING_LOCAL_MODEL, EMBEDDING_DEVICE
+            )
+        return _embeddings_singleton["local"]
+
     if not OPENAI_API_KEY:
         return None
-    from langchain_openai import OpenAIEmbeddings
+    if "api" not in _embeddings_singleton:
+        from langchain_openai import OpenAIEmbeddings
 
-    return OpenAIEmbeddings(
-        model=EMBEDDING_MODEL,
-        api_key=OPENAI_API_KEY,
-        base_url=OPENAI_BASE_URL,
-        # 非 OpenAI 嵌入模型跳过 tiktoken 长度检查，原样发送字符串
-        check_embedding_ctx_length=False,
-        chunk_size=16,  # 兼容服务端批量上限
-    )
+        _embeddings_singleton["api"] = OpenAIEmbeddings(
+            model=EMBEDDING_MODEL,
+            api_key=OPENAI_API_KEY,
+            base_url=OPENAI_BASE_URL,
+            # 非 OpenAI 嵌入模型跳过 tiktoken 长度检查，原样发送字符串
+            check_embedding_ctx_length=False,
+            chunk_size=16,  # 兼容服务端批量上限
+        )
+    return _embeddings_singleton["api"]
 
 
 def _iter_docs(docs_dir: str):
@@ -60,9 +109,12 @@ def build_kb(docs_dir: str = None, index_path: str = None) -> str:
     docs_dir = docs_dir or KB_DOCS_DIR
     index_path = index_path or KB_INDEX_PATH
 
+    if not _embeddings_ready():
+        raise RuntimeError(
+            "嵌入不可用：api 模式需配置 OPENAI_API_KEY，"
+            "local 模式需设置 EMBEDDING_LOCAL_MODEL"
+        )
     embeddings = _get_embeddings()
-    if embeddings is None:
-        raise RuntimeError("未配置 OPENAI_API_KEY，无法构建知识库索引")
 
     from langchain_text_splitters import RecursiveCharacterTextSplitter
 
@@ -108,7 +160,7 @@ def _load(index_path: str):
 def _get_context(index_path: str):
     key = os.path.abspath(index_path)
     if key not in _cache:
-        if not (OPENAI_API_KEY and os.path.exists(os.path.join(index_path, "index.faiss"))):
+        if not (_embeddings_ready() and os.path.exists(os.path.join(index_path, "index.faiss"))):
             _cache[key] = None  # 未就绪：明确标记，避免每次请求重复探测
         else:
             _cache[key] = _load(index_path)
@@ -124,7 +176,12 @@ def search_kb(query: str, k: int = None, index_path: str = None) -> str:
     index, chunks, sources = context
     k = min(k or RETRIEVAL_TOP_K, len(chunks))
 
-    embeddings = _get_embeddings()
+    try:
+        embeddings = _get_embeddings()
+    except RuntimeError as e:
+        # 本地模型缺失/依赖未装等：检索层降级为空串，Agent 走关键词兜底
+        print(f"[search_kb] embeddings unavailable: {e}")
+        return ""
     if embeddings is None:
         return ""
     qv = _normalize(np.array([embeddings.embed_query(query)], dtype="float32"))
