@@ -392,3 +392,6 @@ tmp/
 
 # WorkBuddy workspace data
 .workbuddy/
+
+# Runtime artifacts (checkpoints / kb index / eval reports)
+data/

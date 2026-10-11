@@ -1,0 +1,11 @@
+services:
+  app:
+    build: .
+    ports:
+      - "5000:5000"
+    env_file:
+      - .env
+    volumes:
+      # 对话检查点、知识库索引、评测报告等运行时产物落盘宿主机
+      - ./data:/app/data
+    restart: unless-stopped
