@@ -163,7 +163,12 @@ def _get_context(index_path: str):
         if not (_embeddings_ready() and os.path.exists(os.path.join(index_path, "index.faiss"))):
             _cache[key] = None  # 未就绪：明确标记，避免每次请求重复探测
         else:
-            _cache[key] = _load(index_path)
+            try:
+                _cache[key] = _load(index_path)
+            except (ImportError, FileNotFoundError, RuntimeError) as e:
+                # faiss 缺失或索引文件损坏：降级为不可用，而非让请求报错
+                print(f"[vector_store] index load failed, degrading: {e}")
+                _cache[key] = None
     return _cache[key]
 
 
