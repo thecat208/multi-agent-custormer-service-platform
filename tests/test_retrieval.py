@@ -9,9 +9,9 @@ import retrieval.vector_store as vs
 from retrieval.vector_store import search_kb
 
 
-def test_search_kb_degrades_to_empty_without_index():
-    # 项目目录未构建索引（data/kb_index 不存在），必须返回空串而非报错
-    assert search_kb("手机价格") == ""
+def test_search_kb_degrades_to_empty_without_index(tmp_path):
+    # 指向不存在的索引路径，必须返回空串而非报错（不依赖仓库里是否已建索引）
+    assert search_kb("手机价格", index_path=str(tmp_path / "no_such_index")) == ""
 
 
 def test_search_kb_empty_query():
