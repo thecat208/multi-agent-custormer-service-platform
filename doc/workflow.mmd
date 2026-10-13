@@ -1,0 +1,51 @@
+---
+config:
+  flowchart:
+    curve: linear
+---
+graph TD;
+	__start__([<p>__start__</p>]):::first
+	classify_query(classify_query)
+	product_agent(product_agent)
+	tech_agent(tech_agent)
+	billing_agent(billing_agent)
+	complaint_agent(complaint_agent)
+	general_agent(general_agent)
+	final_response(final_response)
+	__end__([<p>__end__</p>]):::last
+	__start__ --> classify_query;
+	billing_agent -.-> complaint_agent;
+	billing_agent -.-> final_response;
+	billing_agent -.-> general_agent;
+	billing_agent -.-> product_agent;
+	billing_agent -.-> tech_agent;
+	classify_query -. &nbsp;billing&nbsp; .-> billing_agent;
+	classify_query -. &nbsp;complaint&nbsp; .-> complaint_agent;
+	classify_query -. &nbsp;out_of_scope&nbsp; .-> final_response;
+	classify_query -. &nbsp;general_inquiry&nbsp; .-> general_agent;
+	classify_query -. &nbsp;product_info&nbsp; .-> product_agent;
+	classify_query -. &nbsp;technical_support&nbsp; .-> tech_agent;
+	complaint_agent -.-> billing_agent;
+	complaint_agent -.-> final_response;
+	complaint_agent -.-> general_agent;
+	complaint_agent -.-> product_agent;
+	complaint_agent -.-> tech_agent;
+	general_agent -.-> billing_agent;
+	general_agent -.-> complaint_agent;
+	general_agent -.-> final_response;
+	general_agent -.-> product_agent;
+	general_agent -.-> tech_agent;
+	product_agent -.-> billing_agent;
+	product_agent -.-> complaint_agent;
+	product_agent -.-> final_response;
+	product_agent -.-> general_agent;
+	product_agent -.-> tech_agent;
+	tech_agent -.-> billing_agent;
+	tech_agent -.-> complaint_agent;
+	tech_agent -.-> final_response;
+	tech_agent -.-> general_agent;
+	tech_agent -.-> product_agent;
+	final_response --> __end__;
+	classDef default fill:#f2f0ff,line-height:1.2
+	classDef first fill-opacity:0
+	classDef last fill:#bfb6fc

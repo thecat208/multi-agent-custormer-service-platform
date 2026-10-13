@@ -1,0 +1,12 @@
+{"query": "X1 Pro 手机多少钱", "criteria": {"any_groups": [["4999", "5499"]]}}
+{"query": "X1 Pro 的屏幕参数是什么", "criteria": {"any_groups": [["6.7", "2K", "AMOLED", "120Hz"]]}}
+{"query": "SoundPro 降噪耳机卖多少钱", "criteria": {"any_groups": [["1299"]]}}
+{"query": "ThinkPad Pro 14 的价格是多少", "criteria": {"any_groups": [["8999"]]}}
+{"query": "七天无理由退货的条件是什么", "criteria": {"any_groups": [["7天", "七天"], ["未激活", "未使用"]]}}
+{"query": "分期付款手续费率是多少", "criteria": {"any_groups": [["2.5", "手续费"]]}}
+{"query": "快递多久能送到", "criteria": {"any_groups": [["48", "2-3", "2~3"]]}}
+{"query": "帮我查一下订单 ORD20241001001 到哪了", "criteria": {"tools_any": ["query_order"], "any_groups": [["已发货", "运输中", "顺丰", "订单"]]}}
+{"query": "我的耳机连不上蓝牙，帮我建个工单", "criteria": {"tools_any": ["create_ticket"]}}
+{"query": "X1 Pro 屏幕碎了需要报修，顺便帮我查下订单 ORD20241001001", "criteria": {"tools_any": ["create_ticket", "query_order"]}}
+{"query": "你们支持什么支付方式", "criteria": {"any_groups": [["支付宝", "微信", "银行卡"]]}}
+{"query": "你们公司老板是谁", "criteria": {"any_groups": [["仅处理", "抱歉", "无法"]]}}

@@ -1,0 +1,15 @@
+{"query": "X1 Pro 手机多少钱", "expected_doc": "product_phone"}
+{"query": "X1 Pro 的屏幕参数是什么", "expected_doc": "product_phone"}
+{"query": "X1 Pro 电池容量多大，支持无线充电吗", "expected_doc": "product_phone"}
+{"query": "ThinkPad Pro 14 的价格和配置", "expected_doc": "product_laptop"}
+{"query": "笔记本续航怎么样，支持快充吗", "expected_doc": "product_laptop"}
+{"query": "SoundPro 降噪耳机卖多少钱", "expected_doc": "product_audio"}
+{"query": "SoundPro 的降噪深度和续航时间", "expected_doc": "product_audio"}
+{"query": "耳机产品线有哪些可以推荐", "expected_doc": "product_audio"}
+{"query": "七天无理由退货的条件是什么", "expected_doc": "policy_refund"}
+{"query": "质量问题退款流程怎么走", "expected_doc": "policy_refund"}
+{"query": "耳机可以七天无理由退货吗", "expected_doc": "policy_refund"}
+{"query": "支持哪些支付方式", "expected_doc": "policy_payment"}
+{"query": "分期付款手续费率是多少", "expected_doc": "policy_payment"}
+{"query": "发票怎么开具", "expected_doc": "policy_payment"}
+{"query": "快递多久能送到", "expected_doc": "policy_logistics"}
