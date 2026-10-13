@@ -37,6 +37,10 @@ CHECKPOINT_DB_PATH = os.getenv("CHECKPOINT_DB_PATH", "./data/checkpoints.sqlite"
 APP_HOST = os.getenv("APP_HOST", "0.0.0.0")
 APP_PORT = int(os.getenv("APP_PORT", "5000"))
 
+# ===== 成本核算（单次任务平均成本评测用，单位：元 / 百万 token）=====
+PRICE_INPUT_PER_M = float(os.getenv("PRICE_INPUT_PER_M", "2.0"))
+PRICE_OUTPUT_PER_M = float(os.getenv("PRICE_OUTPUT_PER_M", "8.0"))
+
 # ===== 系统 =====
 SYSTEM_NAME = "智能客服工作台"
 VERSION = "2.0.0"

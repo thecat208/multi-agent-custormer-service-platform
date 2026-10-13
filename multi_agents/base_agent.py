@@ -10,6 +10,10 @@ from typing import Any, Dict, List, Optional
 from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
 from pydantic import BaseModel, Field
 
+from log_setup import get_logger
+
+logger = get_logger(__name__)
+
 # 节点名 → 面向客户的中文名（转接提示与回复前缀使用）
 AGENT_LABELS = {
     "product_agent": "产品专家",
@@ -67,13 +71,22 @@ class BaseAgent(ABC):
 若客户诉求明确属于上述某个专家的领域，输出对应节点名；否则输出 none。
 只做判断，不要回答客户问题。"""
         try:
-            result = self.llm.with_structured_output(HandoffDecision).invoke([
+            # 用 bind_tools 而非 with_structured_output：部分 OpenAI 兼容端点
+            # （如 deepseek 思考模式）不支持强制 tool_choice / json_schema，
+            # 让模型自愿调用决策工具是兼容性最好的结构化输出通道
+            tool_llm = self.llm.bind_tools([HandoffDecision])
+            response = tool_llm.invoke([
                 SystemMessage(content=prompt),
                 HumanMessage(content=customer_query),
             ])
-            target = (result.handoff_to or "").strip()
+            calls = getattr(response, "tool_calls", None) or []
+            target = ""
+            for call in calls:
+                if call.get("name") == "HandoffDecision":
+                    target = str((call.get("args") or {}).get("handoff_to") or "").strip()
+                    break
         except Exception as e:
-            print(f"[{self.name}] handoff decision failed: {e}")
+            logger.warning(f"[{self.name}] handoff decision failed, no handoff: {e}")
             return ""
 
         if target in self.handoff_targets:
@@ -88,7 +101,7 @@ class BaseAgent(ABC):
             from retrieval.vector_store import search_kb
             return search_kb(query, k)
         except Exception as e:
-            print(f"[{self.name}] retrieval skipped: {e}")
+            logger.warning(f"[{self.name}] retrieval skipped: {e}")
             return ""
 
     def _run_with_tools(self, messages: List, tools: List, state: Dict[str, Any],

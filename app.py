@@ -27,6 +27,10 @@ from config import (
 import session_store
 from multi_agent_customer_service import make_graph
 
+from log_setup import get_logger
+
+logger = get_logger(__name__)
+
 _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # 全局单例：检查点连接 + 编译后的图
@@ -212,15 +216,15 @@ def delete_session(session_id: str):
         checkpointer.delete_thread(session_id)  # 清除 checkpointer 中的对话状态
     except Exception as e:
         # 注册表已删即可；checkpointer 残留不影响功能
-        print(f"[delete_session] checkpoint cleanup skipped: {e}")
+        logger.warning(f"[delete_session] checkpoint cleanup skipped: {e}")
     return {"message": "会话删除成功", "deleted": deleted}
 
 
 def main():
     import uvicorn
 
-    print(f"{SYSTEM_NAME} v{VERSION}")
-    print(f"http://{APP_HOST}:{APP_PORT}")
+    logger.info(f"{SYSTEM_NAME} v{VERSION}")
+    logger.info(f"http://{APP_HOST}:{APP_PORT}")
     uvicorn.run(app, host=APP_HOST, port=APP_PORT)
 
 

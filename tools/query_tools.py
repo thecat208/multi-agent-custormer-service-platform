@@ -8,6 +8,10 @@ from enum import Enum
 from langchain_core.messages import SystemMessage, HumanMessage
 from pydantic import BaseModel, Field
 
+from log_setup import get_logger
+
+logger = get_logger(__name__)
+
 # 与 multi_agent_customer_service 中 conditional_edges 的 key 保持一致
 _CLASS_LABELS = (
     "product_info",
@@ -79,7 +83,7 @@ def _classify_by_text(query: str, llm) -> str:
         response = llm.invoke(messages)
         return normalize_classifier_label((getattr(response, "content", "") or "").strip())
     except Exception as e:
-        print(f"[classifier] text fallback failed: {e}")
+        logger.error(f"[classifier] text fallback failed: {e}")
         return "general_inquiry"
 
 
@@ -101,5 +105,5 @@ def classify_query(query: str, llm=None) -> str:
         # 结构化输出理论上只会返回合法枚举，这里保留兜底校验防御异常实现
         return label if label in _CLASS_LABELS else "general_inquiry"
     except Exception as e:
-        print(f"[classifier] structured output failed ({e}), falling back to text mode")
+        logger.warning(f"[classifier] structured output failed ({e}), falling back to text mode")
         return _classify_by_text(query, llm)

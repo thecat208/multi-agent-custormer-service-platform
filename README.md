@@ -119,11 +119,22 @@ docker compose exec app python -m retrieval.build
 
 ## 评测
 
-```bash
-python -m evaluation.run_eval
-```
+评测体系覆盖四个维度，指标全部来自真实测量：
 
-30 条 golden 用例覆盖 6 个类别（产品 / 技术 / 账单 / 投诉 / 综合 / 越界拒答），产出 markdown 报告：分类别正确率、越界拒答召回率、延迟均值与 P95、失败用例明细；非零退出码可直接接入 CI。
+| 维度 | 指标 | 运行方式 | 依赖 |
+|---|---|---|---|
+| 意图路由 | 正确率、越界拒答召回、零误拒 | `python -m evaluation.run_eval` | API Key |
+| 检索质量 | Recall@1、Recall@3、MRR、检索延迟 P95 | `python -m evaluation.run_metrics_eval retrieval` | 已建索引 |
+| 工具调用 | 工具选择准确率、参数抽取准确率 | `python -m evaluation.run_metrics_eval tool` | API Key |
+| 生成忠实度 | 忠实度得分、幻觉率（未支持声明占比） | `python -m evaluation.run_metrics_eval faithfulness` | API Key + 索引 |
+| 任务完成率 | 端到端达成用户诉求的比例 | `python -m evaluation.run_task_eval` | API Key + 索引 |
+| 异常恢复率 | 7 类故障注入后按设计降级/自愈的比例 | `python -m evaluation.run_resilience_eval` | 离线 |
+| 任务成本 | 单次任务 token 消耗与平均成本 | `python -m evaluation.run_cost_eval` | API Key |
+
+- 检索评测基于 15 条 golden 查询（6 份知识库文档全覆盖），统计期望文档在 Top-K 的命中与排名，检索延迟与生成延迟分开计量。
+- 工具评测基于 8 条用例（含不存在订单的错误处理路径与"不该调工具"的反例），以记录器包装业务工具捕获真实调用参数，同时验证工具选择与参数抽取。
+- 生成忠实度采用 LLM-as-judge：把回答拆分为事实性声明，逐条对照检索到的参考材料核验；忠实度 = 被支持声明占比，幻觉率 = 1 − 忠实度（与 RAGAS Faithfulness 同思路的轻量实现）。
+- 指标汇总输出到 `evaluation/metrics_report.md`，失败用例（未命中查询、误调用、疑似幻觉声明）逐条列明；指标计算逻辑为纯函数、离线可测，非零退出码可接 CI。
 
 ### 实测结果
 
@@ -132,7 +143,14 @@ python -m evaluation.run_eval
 | 指标 | 结果 |
 |---|---|
 | 意图路由正确率 | 28/30 = **93.3%** |
-| 越界拒答正确率 | **100%**（5/5） |
+| 越界拒答正确率 | **100%**（5/5），正常请求零误拒（25/25） |
+| 检索质量 | Recall@3 **100%** / Recall@1 93.3% / MRR 0.956，检索延迟 P95 185ms |
+| 工具调用 | 选择准确率 **87.5%**、参数抽取准确率 **100%** |
+| 任务完成率 | **83.3%**（12 条端到端用例） |
+| 回答忠实度 | **84.1%**（幻觉率 15.9%，LLM-as-judge 保守下界） |
+| 异常恢复率 | **100%**（7/7 故障注入场景） |
+| 单次任务平均成本 | ¥0.0107（含全部 LLM 调用环节） |
+| 测试覆盖率 | 60%（全仓语句；核心编排/工具模块 90-100%） |
 | 端到端延迟 | 平均 8.7s / P95 15.0s |
 
 分类别：product 8/8、tech 5/5、complaint 4/4、general 3/3、out_of_scope 5/5 全对，billing 3/5——两条误判（订单进度查询、退货条件咨询）落入 general_inquiry，属分类边界案例，可通过强化分类 prompt 的账单类描述优化。延迟主要来自本地嵌入模型 CPU 推理与 LLM 端点往返，可切换 GPU 或更小嵌入模型改善。
@@ -143,7 +161,7 @@ python -m evaluation.run_eval
 python -m pytest tests/ -q
 ```
 
-31 条测试全部离线可跑（不依赖 API Key）：分类三层防御、图编译与护栏短路、转接路由与循环防护、工具调用循环（脚本化假 LLM 驱动）、检索降级、嵌入工厂双通道。
+52 条测试全部离线可跑（不依赖 API Key）：分类三层防御、图编译与护栏短路、转接路由与循环防护、工具调用循环（脚本化假 LLM 驱动）、检索降级、嵌入工厂双通道、评测指标纯函数与 golden 文件校验、日志配置行为、七类故障注入恢复场景。
 
 ## 配置说明
 
@@ -156,6 +174,7 @@ python -m pytest tests/ -q
 | `RETRIEVAL_TOP_K` | `3` | 检索返回片段数 |
 | `CHECKPOINT_DB_PATH` | `./data/checkpoints.sqlite` | 对话检查点 |
 | `APP_HOST` / `APP_PORT` | `0.0.0.0:5000` | 服务监听 |
+| `LOG_LEVEL` | `INFO` | 日志级别（诊断信息分级：warning=已自动降级兜底，error=请求内失败已返回兜底回复） |
 
 完整列表见 `env_example.txt`。
 

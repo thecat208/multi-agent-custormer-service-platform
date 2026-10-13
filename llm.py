@@ -16,6 +16,10 @@ from config import (
     LLM_ENABLE_THINKING,
 )
 
+from log_setup import get_logger
+
+logger = get_logger(__name__)
+
 
 @lru_cache(maxsize=1)
 def get_llm():
@@ -25,7 +29,7 @@ def get_llm():
     图仍可编译、路由与护栏逻辑可离线测试，LLM 依赖的节点走各自的异常分支。
     """
     if not OPENAI_API_KEY:
-        print("[llm] OPENAI_API_KEY not configured, LLM features degraded")
+        logger.warning("[llm] OPENAI_API_KEY not configured, LLM features degraded")
         return None
 
     from langchain_openai import ChatOpenAI

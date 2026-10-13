@@ -27,6 +27,10 @@ from config import (
     RETRIEVAL_TOP_K,
 )
 
+from log_setup import get_logger
+
+logger = get_logger(__name__)
+
 # 惰性加载的检索上下文（进程内单例）
 _cache: dict = {}
 # 嵌入实例单例：local 模式下避免每次查询重复加载模型
@@ -43,7 +47,11 @@ class _LocalEmbeddings:
             raise RuntimeError(
                 "本地嵌入模式需要 sentence-transformers：pip install sentence-transformers"
             ) from e
-        self._model = SentenceTransformer(model_name, device=device)
+        try:
+            self._model = SentenceTransformer(model_name, device=device)
+        except Exception as e:
+            # 模型目录无效等情况：统一转为 RuntimeError，检索层据此降级
+            raise RuntimeError(f"本地嵌入模型加载失败（{model_name}）: {e}") from e
 
     def embed_documents(self, texts: List[str]) -> List[List[float]]:
         vecs = self._model.encode(
@@ -167,34 +175,44 @@ def _get_context(index_path: str):
                 _cache[key] = _load(index_path)
             except (ImportError, FileNotFoundError, RuntimeError) as e:
                 # faiss 缺失或索引文件损坏：降级为不可用，而非让请求报错
-                print(f"[vector_store] index load failed, degrading: {e}")
+                logger.warning(f"[vector_store] index load failed, degrading: {e}")
                 _cache[key] = None
     return _cache[key]
 
 
-def search_kb(query: str, k: int = None, index_path: str = None) -> str:
-    """检索知识库，返回拼接的参考片段；索引不可用时返回空串"""
+def search_kb_with_sources(query: str, k: int = None,
+                           index_path: str = None) -> List[tuple]:
+    """检索知识库，返回 [(source, score, chunk)]；索引不可用时返回空列表"""
     context = _get_context(index_path or KB_INDEX_PATH)
     if not context or not query.strip():
-        return ""
-
-    index, chunks, sources = context
-    k = min(k or RETRIEVAL_TOP_K, len(chunks))
+        return []
 
     try:
         embeddings = _get_embeddings()
     except RuntimeError as e:
-        # 本地模型缺失/依赖未装等：检索层降级为空串，Agent 走关键词兜底
-        print(f"[search_kb] embeddings unavailable: {e}")
-        return ""
+        # 本地模型缺失/依赖未装等：检索层降级为空结果，Agent 走关键词兜底
+        logger.warning(f"[search_kb] embeddings unavailable: {e}")
+        return []
     if embeddings is None:
-        return ""
+        return []
+
+    index, chunks, sources = context
+    k = min(k or RETRIEVAL_TOP_K, len(chunks))
+
     qv = _normalize(np.array([embeddings.embed_query(query)], dtype="float32"))
     scores, ids = index.search(qv, k)
 
-    lines = []
+    results = []
     for score, idx in zip(scores[0], ids[0]):
         if idx < 0:
             continue
-        lines.append(f"【{sources[idx]}】(相关度 {score:.2f})\n{chunks[idx]}")
-    return "\n\n".join(lines)
+        results.append((sources[idx], float(score), chunks[idx]))
+    return results
+
+
+def search_kb(query: str, k: int = None, index_path: str = None) -> str:
+    """检索知识库，返回拼接的参考片段；索引不可用时返回空串"""
+    results = search_kb_with_sources(query, k, index_path)
+    return "\n\n".join(
+        f"【{source}】(相关度 {score:.2f})\n{chunk}" for source, score, chunk in results
+    )

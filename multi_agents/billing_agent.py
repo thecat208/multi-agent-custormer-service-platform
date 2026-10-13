@@ -9,6 +9,10 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from tools.business import query_order
 from .base_agent import BaseAgent
 
+from log_setup import get_logger
+
+logger = get_logger(__name__)
+
 class BillingAgent(BaseAgent):
     def __init__(self):
         super().__init__(
@@ -100,7 +104,7 @@ class BillingAgent(BaseAgent):
         try:
             response_content = self._run_with_tools(messages, [query_order], state)
         except Exception as e:
-            print(f"账单专家调用LLM时出错: {e}")
+            logger.error(f"账单专家调用 LLM 失败，已返回兜底回复: {e}")
             response_content = "抱歉，处理您的账单问题时遇到系统错误，请稍后重试。"
 
         state["response"] = response_content

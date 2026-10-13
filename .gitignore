@@ -395,3 +395,7 @@ tmp/
 
 # Runtime artifacts (checkpoints / kb index / eval reports)
 data/
+
+# Generated eval reports (numbers are backfilled into README / metrics_overview)
+evaluation/report.md
+evaluation/*_report.md

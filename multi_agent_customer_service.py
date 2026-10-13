@@ -18,6 +18,10 @@ from multi_agents import (
 )
 from tools import classify_query
 
+from log_setup import get_logger
+
+logger = get_logger(__name__)
+
 # 超出客服范围时的固定回复（护栏：不调用业务智能体）
 OUT_OF_SCOPE_REPLY = (
     "抱歉，这里是智能客服，仅处理与产品、技术、账单、投诉及相关售后政策类问题；"
@@ -89,7 +93,7 @@ def classify_query_node(state: AgentState) -> AgentState:
     try:
         state["query_type"] = classify_query(customer_query, get_llm())
     except Exception as e:
-        print(f"[classify_query_node] {e}")
+        logger.warning(f"[classify_query_node] 意图分类失败，降级 general_inquiry: {e}")
         state["query_type"] = "general_inquiry"
 
     state["tools_used"].append("query_classification")
@@ -133,11 +137,11 @@ def create_agent_node(agent_name: str):
         result = agent.process(state)
 
         if not isinstance(result, dict):
-            print(f"Agent {agent_name} returned non-dict result: {type(result)}")
+            logger.error(f"Agent {agent_name} returned non-dict result: {type(result)}")
             result = {"response": "Error: Agent processing failed", "current_agent": agent_name}
 
         if "response" not in result:
-            print(f"Agent {agent_name} result missing 'response' field: {result}")
+            logger.error(f"Agent {agent_name} result missing 'response' field: {result}")
             result["response"] = "Error: No response from agent"
 
         # 转接轮：本节点未产生回复，对话轮次由最终应答的专家写入
@@ -205,10 +209,10 @@ def make_graph(checkpointer=None):
     workflow.set_finish_point("final_response")
 
     app = workflow.compile(checkpointer=checkpointer)
-    print("[graph] customer service workflow compiled")
+    logger.info("[graph] customer service workflow compiled")
     return app
 
 
 if __name__ == "__main__":
     make_graph()
-    print("multi-agent customer service graph built successfully")
+    logger.info("multi-agent customer service graph built successfully")

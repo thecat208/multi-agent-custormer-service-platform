@@ -26,6 +26,10 @@ CHECKPOINT_DB_PATH=./data/checkpoints.sqlite
 APP_HOST=0.0.0.0
 APP_PORT=5000
 
+# ===== Logging =====
+# DEBUG / INFO / WARNING / ERROR
+LOG_LEVEL=INFO
+
 # ===== Notes =====
 # 1. Get an API key at https://api.siliconflow.cn
 # 2. Recommended models:

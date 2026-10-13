@@ -7,6 +7,10 @@ from typing import Dict, List, Any
 from langchain_core.messages import HumanMessage, SystemMessage
 from .base_agent import BaseAgent
 
+from log_setup import get_logger
+
+logger = get_logger(__name__)
+
 class ComplaintAgent(BaseAgent):
     def __init__(self):
         super().__init__(
@@ -90,7 +94,7 @@ class ComplaintAgent(BaseAgent):
             response = self.llm.invoke(messages)
             response_content = response.content
         except Exception as e:
-            print(f"投诉专家调用LLM时出错: {e}")
+            logger.error(f"投诉专家调用 LLM 失败，已返回兜底回复: {e}")
             response_content = "抱歉，处理您的投诉时遇到系统错误，请稍后重试。"
 
         state["response"] = response_content
